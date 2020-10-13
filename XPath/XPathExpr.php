@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\CssSelector\XPath;
 
+use Extractor\CSS\CSSHelper as CSSHelper;
 /**
  * XPath expression translator interface.
  *
@@ -23,11 +24,30 @@ namespace Symfony\Component\CssSelector\XPath;
  */
 class XPathExpr
 {
+    /**
+     * @var string
+     */
     private $path;
-    private $element;
-    private $condition;
 
-    public function __construct(string $path = '', string $element = '*', string $condition = '', bool $starPrefix = false)
+    /**
+     * @var string
+     */
+    private $element;
+
+    /**
+     * @var string
+     */
+    private $condition;
+    private $text = '';
+    private $position = false;
+
+    /**
+     * @param string $path
+     * @param string $element
+     * @param string $condition
+     * @param bool   $starPrefix
+     */
+    public function __construct($path = '', $element = '*', $condition = '', $starPrefix = false)
     {
         $this->path = $path;
         $this->element = $element;
@@ -38,24 +58,55 @@ class XPathExpr
         }
     }
 
-    public function getElement(): string
+    public function setPosition($position, $withBrackets = true){
+        if($withBrackets) {
+            CSSHelper::$startBracketsCount++;
+		}
+		
+        $this->position = $position;
+        $this->addEndCondition(")[{$position}]");
+    }
+
+    /**
+     * @return string
+     */
+    public function getElement()
     {
         return $this->element;
     }
 
-    public function addCondition(string $condition): self
+    public function getPosition(){
+        return $this->position;
+    }
+
+        /**
+     * @param $condition
+     *
+     * @return XPathExpr
+     */
+    public function addCondition($condition)
     {
-        $this->condition = $this->condition ? sprintf('(%s) and (%s)', $this->condition, $condition) : $condition;
+        $this->condition = $this->condition ? sprintf('%s and (%s)', $this->condition, $condition) : $condition;
 
         return $this;
     }
 
-    public function getCondition(): string
+    public function addEndCondition($condition){
+        $this->text .= $condition;
+    }
+
+    /**
+     * @return string
+     */
+    public function getCondition()
     {
         return $this->condition;
     }
 
-    public function addNameTest(): self
+    /**
+     * @return XPathExpr
+     */
+    public function addNameTest()
     {
         if ('*' !== $this->element) {
             $this->addCondition('name() = '.Translator::getXpathLiteral($this->element));
@@ -65,7 +116,10 @@ class XPathExpr
         return $this;
     }
 
-    public function addStarPrefix(): self
+    /**
+     * @return XPathExpr
+     */
+    public function addStarPrefix()
     {
         $this->path .= '*/';
 
@@ -75,9 +129,12 @@ class XPathExpr
     /**
      * Joins another XPathExpr with a combiner.
      *
-     * @return $this
+     * @param string    $combiner
+     * @param XPathExpr $expr
+     *
+     * @return XPathExpr
      */
-    public function join(string $combiner, self $expr): self
+    public function join($combiner, XPathExpr $expr)
     {
         $path = $this->__toString().$combiner;
 
@@ -88,15 +145,19 @@ class XPathExpr
         $this->path = $path;
         $this->element = $expr->element;
         $this->condition = $expr->condition;
-
+        $this->position = $expr->position;
+        $this->text = $expr->text;
         return $this;
     }
 
-    public function __toString(): string
+    /**
+     * @return string
+     */
+    public function __toString()
     {
         $path = $this->path.$this->element;
         $condition = null === $this->condition || '' === $this->condition ? '' : '['.$this->condition.']';
 
-        return $path.$condition;
+        return $path.$condition.$this->text;
     }
 }
